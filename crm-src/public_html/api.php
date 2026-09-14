@@ -1,6 +1,6 @@
 <?php
 /**
- * Paraveda CRM — api.php (v3.66)
+ * Paraveda CRM — api.php (v3.67)
  *
  * Contract used by index.html (unchanged):
  *   GET  api.php                       → { key: {t, d}, ... }
@@ -29,13 +29,49 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') { exit; }
 /* ---------- config ---------- */
 $SECRET = 'c6e04cb5de9088be01a685abc243995a80426eba45de2060';
 
-$DATA_DIR = __DIR__ . '/../crm-paraveda-data';
-if (!is_dir($DATA_DIR) || !is_writable($DATA_DIR)) { $DATA_DIR = __DIR__; }
-$DATA_FILE   = $DATA_DIR . '/crm_data.json';
-$LOCK_FILE   = $DATA_DIR . '/.crm.lock';
-$BACKUP_DIR  = $DATA_DIR . '/backups';
-$AUDIT_FILE  = $DATA_DIR . '/audit.log';
-$MAX_BODY    = 12 * 1024 * 1024;   // 12 MB per write
+/* v3.67: deterministic data dir + mirror.
+ * قبل: كان كيبدل المجلد بصمت إلا كان !is_writable → جوج ملفات بيانات مفروشين =
+ * طلبيات كتظهر وكتختفي. دابا: كنختارو المجلد بالـ epoch (أحدث بيانات) ونكتبو
+ * فـ الجوج بلاصات ديما حتى يرجع التوأمية بيناتهم. */
+$DIR_EXT = __DIR__ . '/../crm-paraveda-data';
+$DIR_LOC = __DIR__;
+function crm_epoch_dir($d) {
+  $m = 0;
+  $s = @file_get_contents($d . '/crm_data.json');
+  if ($s !== false && $s !== '') {
+    $j = json_decode($s, true);
+    if (is_array($j)) { foreach ($j as $v) { if (is_array($v) && isset($v['t']) && (int)$v['t'] > $m) $m = (int)$v['t']; } }
+    else { $m = -1; } // undecodable file must never win
+  }
+  foreach (array($d . '/journal.log', $d . '/journal.log.1') as $jf) {
+    if (!file_exists($jf)) continue;
+    $fh = @fopen($jf, 'r'); if (!$fh) continue;
+    $sz = @filesize($jf); if ($sz > 8192) @fseek($fh, -8192, SEEK_END);
+    $tail = '';
+    while (($l = fgets($fh)) !== false) { $l = trim($l); if ($l !== '') $tail = $l; }
+    @fclose($fh);
+    $e = json_decode((string)$tail, true);
+    if (is_array($e) && isset($e['t']) && (int)$e['t'] > $m) $m = (int)$e['t'];
+  }
+  return $m;
+}
+$PRIMARY = $DIR_EXT; $MIRROR = $DIR_LOC;
+$__eE = 0; $__eL = 0;
+if (!is_dir($DIR_EXT)) { $PRIMARY = $DIR_LOC; $MIRROR = null; }
+else {
+  $__eE = crm_epoch_dir($DIR_EXT); $__eL = crm_epoch_dir($DIR_LOC);
+  if ($__eL > $__eE) { $PRIMARY = $DIR_LOC; $MIRROR = $DIR_EXT; }
+}
+$DATA_DIR    = $PRIMARY;
+$DATA_FILE   = $PRIMARY . '/crm_data.json';
+$MIRROR_FILE = ($MIRROR !== null) ? $MIRROR . '/crm_data.json' : null;
+$LOCK_FILE   = $PRIMARY . '/.crm.lock';
+$BACKUP_DIR  = $PRIMARY . '/backups';
+$AUDIT_FILE  = $PRIMARY . '/audit.log';
+$JOURNAL     = $PRIMARY . '/journal.log';
+$JOURNAL_M   = ($MIRROR !== null) ? $MIRROR . '/journal.log' : null;
+$JOURNAL_MAX = 8 * 1024 * 1024;
+$MAX_BODY    = 24 * 1024 * 1024;   // 24 MB per write
 $KEEP_WRITES = 30;                 // rotating pre-write backups
 $KEEP_DAYS   = 30;                 // daily snapshots
 
@@ -76,16 +112,55 @@ function crm_migrate_keys($j) {
   return $o;
 }
 function crm_read_raw() {
-  global $DATA_FILE;
-  if (!file_exists($DATA_FILE)) return array();
-  $s = @file_get_contents($DATA_FILE);
-  $j = json_decode((string)$s, true);
-  if (is_array($j)) return crm_migrate_keys($j);
-  // corrupted main file → try newest backup
-  global $BACKUP_DIR;
-  $c = glob($BACKUP_DIR . '/b-*.json');
-  if ($c) { rsort($c); foreach ($c as $f) { $j = json_decode((string)@file_get_contents($f), true); if (is_array($j)) { crm_audit("recover | from=" . basename($f)); return $j; } } }
-  return array();
+  global $DATA_FILE, $BACKUP_DIR;
+  $j = null;
+  if (file_exists($DATA_FILE)) {
+    $s = @file_get_contents($DATA_FILE);
+    $j = json_decode((string)$s, true);
+    if (!is_array($j)) crm_audit("corrupt | main file undecodable | len=" . strlen((string)$s));
+  }
+  if (!is_array($j)) {
+    // corrupted/missing main file → try newest backup (journal replay below restores newest state anyway)
+    $c = glob($BACKUP_DIR . '/b-*.json');
+    if ($c) { rsort($c); foreach ($c as $f) { $j = json_decode((string)@file_get_contents($f), true); if (is_array($j)) { crm_audit("recover | from=" . basename($f)); break; } } }
+  }
+  if (!is_array($j)) $j = array();
+  // v3.67: journal replay — أحدث كتابة ناجحة كتربح ديما، حتى إلا crm_data.json تبدل يدويا
+  // (FTP) ولا تخسر → الطلبيات الجديدة عمرهم ما كيتنساو.
+  return crm_journal_replay(crm_migrate_keys($j));
+}
+/* v3.67: journal (WAL) — كل كتابة ناجحة كتسجل سطر فـ journal.log. القراية كتعاود
+ * التسجيلات فوق الملف الأساسي: إلا الملف الأساسي رجع لنسخة قديمة ولا تفسد،
+ * أحدث حالة كترجع بوحدها من الـ journal. */
+function crm_journal_append($k, $t, $d) {
+  global $JOURNAL, $JOURNAL_M, $JOURNAL_MAX;
+  $line = json_encode(array('k' => $k, 't' => $t, 'd' => $d), JSON_UNESCAPED_UNICODE);
+  if ($line === false) return;
+  foreach (array($JOURNAL, $JOURNAL_M) as $jf) {
+    if (!$jf) continue;
+    if (@file_put_contents($jf, $line . "\n", FILE_APPEND | LOCK_EX) !== false && @filesize($jf) > $JOURNAL_MAX) {
+      // كل كتابة كتسبقها كتابة كاملة ديال الملف الرئيسي تحت القفل → محتوى الـ journalولى
+      // مكرر → نحيدوه حتى ما يثقلش القراية (replay) فالطلبات الجاية.
+      @unlink($jf);
+    }
+  }
+}
+function crm_journal_replay($data) {
+  global $JOURNAL, $JOURNAL_M;
+  $files = array($JOURNAL . '.1', $JOURNAL, ($JOURNAL_M !== null ? $JOURNAL_M . '.1' : null), $JOURNAL_M);
+  foreach ($files as $jf) {
+    if (!$jf || !file_exists($jf)) continue;
+    $fh = @fopen($jf, 'r'); if (!$fh) continue;
+    while (($l = fgets($fh)) !== false) {
+      $l = trim($l); if ($l === '') continue;
+      $e = json_decode($l, true);
+      if (!is_array($e) || !isset($e['k'], $e['t'], $e['d']) || !is_array($e['d'])) continue;
+      $k = (string)$e['k']; $et = (int)$e['t'];
+      if (!isset($data[$k]) || !is_array($data[$k]) || (int)$data[$k]['t'] < $et) $data[$k] = array('t' => $et, 'd' => $e['d']);
+    }
+    @fclose($fh);
+  }
+  return $data;
 }
 /** unwrap {t,d:{t,d:X}} → X (defensive: corruption produced by old import.php) */
 function crm_unwrap($v) {
@@ -185,6 +260,18 @@ function crm_write($data) {
   if (!@rename($tmp, $DATA_FILE)) { @unlink($tmp); return false; }
   return true;
 }
+/* v3.67: write primary + mirror — الجوج ملفات ديما متطابقين، ما بقاش split-brain */
+function crm_write_all($data) {
+  global $MIRROR_FILE;
+  $ok = crm_write($data);
+  if ($MIRROR_FILE) {
+    $tmp = $MIRROR_FILE . '.tmp.' . getmypid();
+    $json = json_encode($data, JSON_UNESCAPED_UNICODE);
+    if ($json !== false && @file_put_contents($tmp, $json, LOCK_EX) !== false) { @rename($tmp, $MIRROR_FILE); }
+    elseif (file_exists($tmp)) { @unlink($tmp); }
+  }
+  return $ok;
+}
 
 $m = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
@@ -213,7 +300,7 @@ if ($m === 'POST') {
   /* -- actions (Digylog etc.) -- */
   if (isset($b['action'])) {
     $a = (string)$b['action'];
-    if ($a === 'ping') crm_out(array('ok'=>true, 'v'=>'3.66'));
+    if ($a === 'ping') crm_out(array('ok'=>true, 'v'=>'3.67'));
     if ($a === 'restore') crm_out(array('ok'=>false, 'err'=>'restore-not-implemented', 'msg'=>'الاسترجاع كيدار يدوياً من مجلد backups'), 501);
     if (strpos($a, 'digylog') === 0) crm_out(array('ok'=>false, 'err'=>'digylog-removed', 'msg'=>'الربط مع Digylog تحيد فـ v3.41'), 410);
     crm_out(array('ok'=>false, 'err'=>'unknown-action'), 400);
@@ -231,11 +318,16 @@ if ($m === 'POST') {
   if ($t > $now + 60000) $t = $now; // clock skew guard
 
   // v3.62: reset epoch — writes of wiped keys carrying data older than the reset are ignored
+  // v3.67: EXCEPT for reset-aware clients — the body now carries rs (the client's seen reset
+  // stamp). A device that acknowledged the reset can never silently lose its NEW orders again,
+  // even if its clock is behind (client _u < RESET_T was wrongly discarding genuine new rows).
   $__cur0 = crm_read_raw();
   $RESET_T = isset($__cur0['paraveda_reset_v1']['t']) ? (int)$__cur0['paraveda_reset_v1']['t'] : 0;
+  $RS = isset($b['rs']) ? (int)$b['rs'] : 0;
+  $RESET_AWARE = ($RESET_T > 0 && $RS >= $RESET_T);
   $RESET_KEYS = array('paraveda_catalog_v1','sheet_pièce','paraveda_history_v1','paraveda_adspend_v1','paraveda_perfrows_v1','paraveda_backup_v1');
-  if ($RESET_T > 0 && in_array($k, $RESET_KEYS, true) && $t < $RESET_T) { crm_audit("reset-stale | key=$k | t=$t < reset=$RESET_T"); crm_out(array('ok'=>true, 'noop'=>'reset-stale', 'reset'=>$RESET_T)); }
-  if ($k === 'paraveda_orders_v5' && $RESET_T > 0 && is_array($d)) {
+  if ($RESET_T > 0 && !$RESET_AWARE && in_array($k, $RESET_KEYS, true) && $t < $RESET_T) { crm_audit("reset-stale | key=$k | t=$t < reset=$RESET_T"); crm_out(array('ok'=>true, 'noop'=>'reset-stale', 'reset'=>$RESET_T)); }
+  if ($k === 'paraveda_orders_v5' && $RESET_T > 0 && !$RESET_AWARE && is_array($d)) {
     $__f = array(); foreach ($d as $o) { if (is_array($o) && isset($o['_u']) && (float)$o['_u'] >= $RESET_T) $__f[] = $o; }
     $d = $__f;
   }
@@ -263,7 +355,7 @@ if ($m === 'POST') {
   $newJson  = json_encode($d, JSON_UNESCAPED_UNICODE);
   if ($prevJson === $newJson) {          // nothing changed: touch time only, no backup churn
     $data[$k]['t'] = $t;
-    crm_write($data);
+    crm_write_all($data);
     if ($fh) { @flock($fh, LOCK_UN); @fclose($fh); }
     crm_out(array('ok'=>true, 'noop'=>'same'));
   }
@@ -275,7 +367,8 @@ if ($m === 'POST') {
     $d = crm_merge_orders($data[$k]['d'], $d, $RESET_T);
   }
   $data[$k] = array('t' => $t, 'd' => $d);
-  $ok = crm_write($data);
+  $ok = crm_write_all($data);
+  if ($ok && is_array($d)) crm_journal_append($k, $t, $d);
   if ($fh) { @flock($fh, LOCK_UN); @fclose($fh); }
 
   if (!$ok) crm_out(array('ok'=>false, 'err'=>'write-failed'), 500);
