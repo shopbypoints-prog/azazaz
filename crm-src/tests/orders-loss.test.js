@@ -1,8 +1,25 @@
 const fs = require('fs');
-// ==== load EXACT functions from the patched index.html ====
+// ==== extract the EXACT live functions from index.html on every run ====
+const html = fs.readFileSync(__dirname + '/../public_html/index.html', 'utf-8');
+function extractFn(name){
+  const i = html.indexOf('function ' + name + '(');
+  if (i < 0) throw new Error('missing fn: ' + name);
+  let j = html.indexOf('{', i), depth = 0, instr = null, k = j;
+  while (k < html.length){
+    const c = html[k];
+    if (instr){ if (c === '\\') { k += 2; continue; } if (c === instr) instr = null; }
+    else if (c === '"' || c === "'" || c === '`') instr = c;
+    else if (c === '{') depth++;
+    else if (c === '}'){ depth--; if (!depth) return html.slice(i, k+1); }
+    k++;
+  }
+  throw new Error('unbalanced: ' + name);
+}
+const dfm = html.match(/const __pvDateFields=\[[^\]]*\]/);
+const code = [dfm[0], ...['__pvLocalDate','__pvStampDates','__pvResetSeen','__pvClean','__pvMergeRow','__pvMergeOrders'].map(extractFn)].join('\n');
 const store = new Map();
 global.localStorage = {getItem:k=>store.has(k)?store.get(k):null,setItem:(k,v)=>store.set(k,String(v)),removeItem:k=>store.delete(k)};
-eval(fs.readFileSync('/tmp/extracted.js','utf-8'));
+eval(code);
 
 // ==== server merge port (api.php v3.67 — rs-aware reset, date-lock) ====
 const DATE_FIELDS=['dateCreation','dateConfirmation','dateExp','dateLiv'];

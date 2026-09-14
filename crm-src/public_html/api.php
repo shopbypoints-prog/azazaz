@@ -1,6 +1,6 @@
 <?php
 /**
- * Paraveda CRM — api.php (v3.71)
+ * Paraveda CRM — api.php (v3.72)
  *
  * Contract used by index.html (unchanged):
  *   GET  api.php                       → { key: {t, d}, ... }
@@ -81,7 +81,7 @@ $ALLOWED_KEYS = array(
   'paraveda_perfrows_v1','paraveda_livraison_v1','paraveda_history_v1','paraveda_villes_v2',
   'paraveda_catalog_v1','sheet_pièce','paraveda_team_photos_v1','tabs_list_v1',
   'custom_sheets_v1','paraveda_period_v1','paraveda_period_v2',
-  'paraveda_backup_v1','paraveda_backup_v1_agents','paraveda_reset_v1'
+  'paraveda_backup_v1','paraveda_backup_v1_agents'
 );
 
 /* ---------- helpers ---------- */
@@ -300,7 +300,7 @@ if ($m === 'POST') {
   /* -- actions (Digylog etc.) -- */
   if (isset($b['action'])) {
     $a = (string)$b['action'];
-    if ($a === 'ping') crm_out(array('ok'=>true, 'v'=>'3.71'));
+    if ($a === 'ping') crm_out(array('ok'=>true, 'v'=>'3.72'));
     if ($a === 'restore') crm_out(array('ok'=>false, 'err'=>'restore-not-implemented', 'msg'=>'الاسترجاع كيدار يدوياً من مجلد backups'), 501);
     if (strpos($a, 'digylog') === 0) crm_out(array('ok'=>false, 'err'=>'digylog-removed', 'msg'=>'الربط مع Digylog تحيد فـ v3.41'), 410);
     crm_out(array('ok'=>false, 'err'=>'unknown-action'), 400);
@@ -332,7 +332,7 @@ if ($m === 'POST') {
     $d = $__f;
   }
   // ghost guard: never let a client wipe orders/users with an empty array while server has data
-  if (($k === 'paraveda_orders_v5' || $k === 'paraveda_users_v1' || $k === 'paraveda_villes_v2') && is_array($d) && count($d) === 0) {
+  if (($k === 'paraveda_orders_v5' || $k === 'paraveda_users_v1' || $k === 'paraveda_villes_v2' || $k === 'paraveda_chat_v1' || $k === 'paraveda_catalog_v1') && is_array($d) && count($d) === 0) {
     $cur = crm_read_raw();
     if (isset($cur[$k]['d']) && is_array($cur[$k]['d']) && count($cur[$k]['d']) > 0) {
       crm_audit("ghost | key=$k | empty write blocked");
@@ -365,6 +365,19 @@ if ($m === 'POST') {
   // several agents/admins writing at the same time never erase each other.
   if ($k === 'paraveda_orders_v5' && is_array($d) && isset($data[$k]['d']) && is_array($data[$k]['d'])) {
     $d = crm_merge_orders($data[$k]['d'], $d, $RESET_T);
+  }
+  // v3.72: الرسائل كيتدمجو union بالـ id (ما كاينش مسح فالشات) — كاتب متزامنين ما يضيعوش رسائل
+  if ($k === 'paraveda_chat_v1' && is_array($d) && isset($data[$k]['d']) && is_array($data[$k]['d'])) {
+    $byId = array();
+    foreach ($data[$k]['d'] as $m) { if (is_array($m) && isset($m['id'])) $byId[(string)$m['id']] = $m; }
+    foreach ($d as $m) {
+      if (!is_array($m) || !isset($m['id'])) continue;
+      $id = (string)$m['id'];
+      if (isset($byId[$id])) { $byId[$id]['read'] = !empty($byId[$id]['read']) || !empty($m['read']); }
+      else $byId[$id] = $m;
+    }
+    usort($byId, function($x, $y) { $a = (float)$x['id']; $b = (float)$y['id']; return $a == $b ? 0 : ($a < $b ? -1 : 1); });
+    $d = array_values($byId);
   }
   $data[$k] = array('t' => $t, 'd' => $d);
   $ok = crm_write_all($data);
