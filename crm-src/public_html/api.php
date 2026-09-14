@@ -27,7 +27,7 @@ header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') { exit; }
 
 /* ---------- config ---------- */
-$SECRET = 'c6e04cb5de9088be01a685abc243995a80426eba45de2060';
+$SECRET = '8c907fc0f4ffe0b9775a6b7c3c0fc7700e5724c0d78343df';
 
 /* v3.67: deterministic data dir + mirror.
  * قبل: كان كيبدل المجلد بصمت إلا كان !is_writable → جوج ملفات بيانات مفروشين =

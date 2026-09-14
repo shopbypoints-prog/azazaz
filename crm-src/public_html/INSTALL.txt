@@ -719,7 +719,7 @@
 🩺 كيفاش تتأكد بلي كولشي خدام
 ────────────────────────────────────────────────────────
 حل هاد الرابط فالمتصفح (بدل الدومين):
-https://الدومين-ديالك/api.php?action=status&token=c6e04cb5de9088be01a685abc243995a80426eba45de2060
+https://الدومين-ديالك/api.php?action=status&token=8c907fc0f4ffe0b9775a6b7c3c0fc7700e5724c0d78343df
 
 غادي تشوف تقرير كامل: وين مخزنة الداتا، شحال من نسخة
 احتياطية، آخر كتابة، ومن كتب.
@@ -732,10 +732,10 @@ https://الدومين-ديالك/api.php?action=status&token=c6e04cb5de9088be01
 ↩️ استرجاع نسخة احتياطية (إلا احتجتي يوماً)
 ────────────────────────────────────────────────────────
 قائمة النسخ:
-https://الدومين-ديالك/api.php?action=backups&token=c6e04cb5de9088be01a685abc243995a80426eba45de2060
+https://الدومين-ديالك/api.php?action=backups&token=8c907fc0f4ffe0b9775a6b7c3c0fc7700e5724c0d78343df
 
 الاسترجاع (POST على api.php):
-   Header:  X-Sync-Token: c6e04cb5de9088be01a685abc243995a80426eba45de2060
+   Header:  X-Sync-Token: 8c907fc0f4ffe0b9775a6b7c3c0fc7700e5724c0d78343df
    Body:    {"action":"restore","file":"b-20260824-120000-123.json"}
 
 ✨ الجديد فـ v2.5 — صفحة Ranking احترافية

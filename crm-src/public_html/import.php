@@ -192,7 +192,7 @@
 
             try {
                 // Fetch data from crm_data.json
-                const response = await fetch('api.php?t=' + Date.now(), { cache: 'no-store', headers: { 'X-Sync-Token': 'c6e04cb5de9088be01a685abc243995a80426eba45de2060' } });
+                const response = await fetch('api.php?t=' + Date.now(), { cache: 'no-store', headers: { 'X-Sync-Token': '8c907fc0f4ffe0b9775a6b7c3c0fc7700e5724c0d78343df' } });
                 if (!response.ok) {
                     throw new Error('ما لقيناش crm_data.json');
                 }

@@ -13,7 +13,7 @@
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
 
-$SECRET = 'c6e04cb5de9088be01a685abc243995a80426eba45de2060';
+$SECRET = '8c907fc0f4ffe0b9775a6b7c3c0fc7700e5724c0d78343df';
 
 /* ---------- paths (نفس منطق api.php v3.67: بلايص رئيسية + مرايا) ---------- */
 $DIR_EXT = __DIR__ . '/../crm-paraveda-data';
