@@ -134,7 +134,7 @@ const server = http.createServer(async (req,res)=>{
     }
     if (req.method === 'POST') {
       const b = JSON.parse((await bodyOf(req))||'{}');
-      if (b.action === 'ping') return json(res,200,{ok:true,v:'3.74'});
+      if (b.action === 'ping') return json(res,200,{ok:true,v:'3.75'});
       const k0=String(b.key||''); const k=k0.startsWith('afrizon_')?'paraveda_'+k0.slice(8):k0;
       if (!ALLOWED.has(k)) { audit(`reject | key=${k}`); return json(res,400,{ok:false,err:'key-not-allowed'}); }
       let d = unwrap(b.d);

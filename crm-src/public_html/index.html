@@ -738,5 +738,20 @@ tr[data-ann="1"] input,tr[data-ann="1"] select,tr[data-ann="1"] textarea{text-de
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      (function(){
+        function boot(){
+          if(document.getElementById("pv-dino-btn"))return;
+          var b=document.createElement("button");
+          b.id="pv-dino-btn"; b.title="Dino Game"; b.innerHTML="\ud83e\udd96";
+          b.style.cssText="position:fixed;bottom:96px;right:20px;z-index:70;width:56px;height:56px;border-radius:9999px;border:0;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:26px;box-shadow:0 10px 25px rgba(99,102,241,.4);cursor:pointer;transition:transform .15s";
+          b.onmouseenter=function(){b.style.transform="scale(1.08)"};
+          b.onmouseleave=function(){b.style.transform="scale(1)"};
+          b.onclick=function(){window.open("dino.html","_blank")};
+          document.body.appendChild(b);
+        }
+        if(document.body)boot();else document.addEventListener("DOMContentLoaded",boot);
+      })();
+    </script>
   </body>
 </html>
