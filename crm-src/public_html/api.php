@@ -1,6 +1,6 @@
 <?php
 /**
- * Paraveda CRM — api.php (v3.79)
+ * Paraveda CRM — api.php (v3.80)
  *
  * Contract used by index.html (unchanged):
  *   GET  api.php                       → { key: {t, d}, ... }
@@ -156,7 +156,9 @@ function crm_journal_replay($data) {
       $e = json_decode($l, true);
       if (!is_array($e) || !isset($e['k'], $e['t'], $e['d']) || !is_array($e['d'])) continue;
       $k = (string)$e['k']; $et = (int)$e['t'];
-      if (!isset($data[$k]) || !is_array($data[$k]) || (int)$data[$k]['t'] < $et) $data[$k] = array('t' => $et, 'd' => $e['d']);
+      // v3.80: كل سطر = لقطة كاملة مدمجة فـ وقتها — آخر سطر بالترتيب كتربح ديما.
+      // (المقارنة بـ t كانت كتعاود سطر قديم بساعة متقدمة فوق دمج أحدث منه = فقدان)
+      $data[$k] = array('t' => $et, 'd' => $e['d']);
     }
     @fclose($fh);
   }
@@ -314,7 +316,7 @@ if ($m === 'POST') {
   /* -- actions (Digylog etc.) -- */
   if (isset($b['action'])) {
     $a = (string)$b['action'];
-    if ($a === 'ping') crm_out(array('ok'=>true, 'v'=>'3.79'));
+    if ($a === 'ping') crm_out(array('ok'=>true, 'v'=>'3.80'));
     if ($a === 'restore') crm_out(array('ok'=>false, 'err'=>'restore-not-implemented', 'msg'=>'الاسترجاع كيدار يدوياً من مجلد backups'), 501);
     if (strpos($a, 'digylog') === 0) crm_out(array('ok'=>false, 'err'=>'digylog-removed', 'msg'=>'الربط مع Digylog تحيد فـ v3.41'), 410);
     crm_out(array('ok'=>false, 'err'=>'unknown-action'), 400);

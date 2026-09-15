@@ -30,7 +30,8 @@ function journalReplay(data){
       if (!line.trim()) continue;
       let e; try { e = JSON.parse(line); } catch { continue; }
       if (!e || !e.k || !e.t || typeof e.d!=='object') continue;
-      if (!data[e.k] || typeof data[e.k]!=='object' || (data[e.k].t||0) < e.t) data[e.k] = {t:e.t, d:e.d};
+      // v3.80: آخر سطر بالترتيب الزمني كتربح (بلا مقارنة t — حيت الساعات كيختلفو)
+      data[e.k] = {t:e.t, d:e.d};
     }
   }
   return data;
@@ -134,7 +135,7 @@ const server = http.createServer(async (req,res)=>{
     }
     if (req.method === 'POST') {
       const b = JSON.parse((await bodyOf(req))||'{}');
-      if (b.action === 'ping') return json(res,200,{ok:true,v:'3.79'});
+      if (b.action === 'ping') return json(res,200,{ok:true,v:'3.80'});
       const k0=String(b.key||''); const k=k0.startsWith('afrizon_')?'paraveda_'+k0.slice(8):k0;
       if (!ALLOWED.has(k)) { audit(`reject | key=${k}`); return json(res,400,{ok:false,err:'key-not-allowed'}); }
       let d = unwrap(b.d);
