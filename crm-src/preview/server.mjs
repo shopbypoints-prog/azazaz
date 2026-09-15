@@ -134,7 +134,7 @@ const server = http.createServer(async (req,res)=>{
     }
     if (req.method === 'POST') {
       const b = JSON.parse((await bodyOf(req))||'{}');
-      if (b.action === 'ping') return json(res,200,{ok:true,v:'3.77'});
+      if (b.action === 'ping') return json(res,200,{ok:true,v:'3.78'});
       const k0=String(b.key||''); const k=k0.startsWith('afrizon_')?'paraveda_'+k0.slice(8):k0;
       if (!ALLOWED.has(k)) { audit(`reject | key=${k}`); return json(res,400,{ok:false,err:'key-not-allowed'}); }
       let d = unwrap(b.d);
@@ -152,7 +152,8 @@ const server = http.createServer(async (req,res)=>{
       }
       const data = readRaw();
       const prevT = data[k]?.t ? +data[k].t : 0;
-      if (t < prevT && k!=='paraveda_orders_v5') { audit(`stale | key=${k}`); return json(res,200,{ok:true,noop:'stale',t:prevT}); }
+      const NOMERGE=new Set(['paraveda_orders_v5','paraveda_chat_v1','paraveda_users_v1','paraveda_agent_names_v1','paraveda_villes_v2','paraveda_worktimes_v1','paraveda_remarques_v1','paraveda_avances_v1','paraveda_adspend_v1','paraveda_perfrows_v1','paraveda_livraison_v1','paraveda_history_v1','paraveda_catalog_v1','tabs_list_v1','sheet_pièce']);
+      if (t < prevT && !NOMERGE.has(k)) { audit(`stale | key=${k}`); return json(res,200,{ok:true,noop:'stale',t:prevT}); }
       const prevJson=JSON.stringify(data[k]?.d??null), newJson=JSON.stringify(d);
       if (prevJson===newJson) { data[k]={...(data[k]||{}),t}; writeData(data); return json(res,200,{ok:true,noop:'same'}); }
       backup();
@@ -162,6 +163,12 @@ const server = http.createServer(async (req,res)=>{
         for (const m of d){ if(!m||m.id===undefined)continue; const id0=String(m.id);
           if (byId.has(id0)) byId.get(id0).read = !!(byId.get(id0).read||m.read); else byId.set(id0,m); }
         d = [...byId.values()].sort((a,b)=>(Number(a.id)||0)-(Number(b.id)||0));
+      }
+      // v3.78: دمج موحد — اليوزرز/الوكلاء/المدن/غيرهم
+      if (NOMERGE.has(k) && k!=='paraveda_orders_v5' && k!=='paraveda_chat_v1' && Array.isArray(d) && Array.isArray(data[k]?.d)) {
+        const rowKey=r=>{ if(r&&typeof r==='object'&&r.id!==undefined)return 'i:'+String(r.id); if(r===null||typeof r!=='object')return 's:'+String(r); return 'j:'+JSON.stringify(r); };
+        if (t >= prevT) d = d;
+        else { const have=new Set(data[k].d.map(rowKey)); for (const r of d){ const kk=rowKey(r); if(!have.has(kk)){ data[k].d.push(r); have.add(kk); } } d = data[k].d; }
       }
       data[k]={t,d};
       writeData(data); journalAppend(k,t,d);

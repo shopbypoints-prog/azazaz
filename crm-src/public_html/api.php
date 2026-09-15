@@ -1,6 +1,6 @@
 <?php
 /**
- * Paraveda CRM — api.php (v3.77)
+ * Paraveda CRM — api.php (v3.78)
  *
  * Contract used by index.html (unchanged):
  *   GET  api.php                       → { key: {t, d}, ... }
@@ -251,6 +251,20 @@ function crm_merge_orders($cur, $in, $reset = 0) {
   usort($out, function($x, $y) { $a = (float)$x['id']; $b = (float)$y['id']; return $a == $b ? 0 : ($a < $b ? 1 : -1); });
   return $out;
 }
+/* v3.78: دمج موحد — كتابة أحدث كتربح (حتى الحذف)، كتابة متأخرة كتزيد غير الناقص.
+   هذا لي كيمنع اختفاء اليوزر الجديد ملي ساعة الجهاز متأخرة ولا جوج زادو فنفس اللحظة. */
+function crm_row_key($row) {
+  if (is_array($row) && isset($row['id'])) return 'i:' . (string)$row['id'];
+  if (is_scalar($row)) return 's:' . (string)$row;
+  return 'j:' . json_encode($row);
+}
+function crm_merge_list($cur, $in, $tCur, $tIn) {
+  if ($tIn >= $tCur) return $in;
+  $have = array();
+  foreach ($cur as $row) $have[crm_row_key($row)] = true;
+  foreach ($in as $row) { $kk = crm_row_key($row); if (!isset($have[$kk])) { $cur[] = $row; $have[$kk] = true; } }
+  return $cur;
+}
 function crm_write($data) {
   global $DATA_FILE;
   $tmp = $DATA_FILE . '.tmp.' . getmypid();
@@ -300,7 +314,7 @@ if ($m === 'POST') {
   /* -- actions (Digylog etc.) -- */
   if (isset($b['action'])) {
     $a = (string)$b['action'];
-    if ($a === 'ping') crm_out(array('ok'=>true, 'v'=>'3.77'));
+    if ($a === 'ping') crm_out(array('ok'=>true, 'v'=>'3.78'));
     if ($a === 'restore') crm_out(array('ok'=>false, 'err'=>'restore-not-implemented', 'msg'=>'الاسترجاع كيدار يدوياً من مجلد backups'), 501);
     if (strpos($a, 'digylog') === 0) crm_out(array('ok'=>false, 'err'=>'digylog-removed', 'msg'=>'الربط مع Digylog تحيد فـ v3.41'), 410);
     crm_out(array('ok'=>false, 'err'=>'unknown-action'), 400);
@@ -346,7 +360,8 @@ if ($m === 'POST') {
   $data = crm_read_raw();
   $prevT = isset($data[$k]['t']) ? (int)$data[$k]['t'] : 0;
 
-  if ($t < $prevT && $k !== 'paraveda_orders_v5') { // stale write from a tab that was offline (orders: merged instead)
+  $__NOMERGE = array('paraveda_orders_v5','paraveda_chat_v1','paraveda_users_v1','paraveda_agent_names_v1','paraveda_villes_v2','paraveda_worktimes_v1','paraveda_remarques_v1','paraveda_avances_v1','paraveda_adspend_v1','paraveda_perfrows_v1','paraveda_livraison_v1','paraveda_history_v1','paraveda_catalog_v1','tabs_list_v1','sheet_pièce');
+  if ($t < $prevT && !in_array($k, $__NOMERGE, true)) { // stale write — غير على ليستة ما كيندمجوش
     if ($fh) { @flock($fh, LOCK_UN); @fclose($fh); }
     crm_audit("stale | key=$k | t=$t < $prevT");
     crm_out(array('ok'=>true, 'noop'=>'stale', 't'=>$prevT));
@@ -378,6 +393,11 @@ if ($m === 'POST') {
     }
     usort($byId, function($x, $y) { $a = (float)$x['id']; $b = (float)$y['id']; return $a == $b ? 0 : ($a < $b ? -1 : 1); });
     $d = array_values($byId);
+  }
+  // v3.78: دمج موحد — اليوزرز/الوكلاء/المدن/غيرهم
+  if (in_array($k, $__NOMERGE, true) && $k !== 'paraveda_orders_v5' && $k !== 'paraveda_chat_v1'
+      && is_array($d) && isset($data[$k]['d']) && is_array($data[$k]['d'])) {
+    $d = crm_merge_list($data[$k]['d'], $d, $prevT, $t);
   }
   $data[$k] = array('t' => $t, 'd' => $d);
   $ok = crm_write_all($data);
