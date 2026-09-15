@@ -1,6 +1,6 @@
 <?php
 /**
- * Paraveda CRM — api.php (v3.73)
+ * Paraveda CRM — api.php (v3.74)
  *
  * Contract used by index.html (unchanged):
  *   GET  api.php                       → { key: {t, d}, ... }
@@ -300,7 +300,7 @@ if ($m === 'POST') {
   /* -- actions (Digylog etc.) -- */
   if (isset($b['action'])) {
     $a = (string)$b['action'];
-    if ($a === 'ping') crm_out(array('ok'=>true, 'v'=>'3.73'));
+    if ($a === 'ping') crm_out(array('ok'=>true, 'v'=>'3.74'));
     if ($a === 'restore') crm_out(array('ok'=>false, 'err'=>'restore-not-implemented', 'msg'=>'الاسترجاع كيدار يدوياً من مجلد backups'), 501);
     if (strpos($a, 'digylog') === 0) crm_out(array('ok'=>false, 'err'=>'digylog-removed', 'msg'=>'الربط مع Digylog تحيد فـ v3.41'), 410);
     crm_out(array('ok'=>false, 'err'=>'unknown-action'), 400);
@@ -332,7 +332,7 @@ if ($m === 'POST') {
     $d = $__f;
   }
   // ghost guard: never let a client wipe orders/users with an empty array while server has data
-  if (($k === 'paraveda_orders_v5' || $k === 'paraveda_users_v1' || $k === 'paraveda_villes_v2' || $k === 'paraveda_chat_v1' || $k === 'paraveda_catalog_v1') && is_array($d) && count($d) === 0) {
+  if (($k === 'paraveda_orders_v5' || $k === 'paraveda_users_v1' || $k === 'paraveda_villes_v2' || $k === 'paraveda_chat_v1' || $k === 'paraveda_catalog_v1' || $k === 'paraveda_backup_v1' || $k === 'paraveda_backup_v1_agents') && is_array($d) && count($d) === 0) {
     $cur = crm_read_raw();
     if (isset($cur[$k]['d']) && is_array($cur[$k]['d']) && count($cur[$k]['d']) > 0) {
       crm_audit("ghost | key=$k | empty write blocked");

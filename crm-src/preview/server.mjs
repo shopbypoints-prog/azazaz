@@ -134,7 +134,7 @@ const server = http.createServer(async (req,res)=>{
     }
     if (req.method === 'POST') {
       const b = JSON.parse((await bodyOf(req))||'{}');
-      if (b.action === 'ping') return json(res,200,{ok:true,v:'3.73'});
+      if (b.action === 'ping') return json(res,200,{ok:true,v:'3.74'});
       const k0=String(b.key||''); const k=k0.startsWith('afrizon_')?'paraveda_'+k0.slice(8):k0;
       if (!ALLOWED.has(k)) { audit(`reject | key=${k}`); return json(res,400,{ok:false,err:'key-not-allowed'}); }
       let d = unwrap(b.d);
@@ -147,7 +147,7 @@ const server = http.createServer(async (req,res)=>{
       const RESET_KEYS=['paraveda_catalog_v1','sheet_pièce','paraveda_history_v1','paraveda_adspend_v1','paraveda_perfrows_v1','paraveda_backup_v1'];
       if (RESET_T>0 && !AWARE && RESET_KEYS.includes(k) && t<RESET_T) return json(res,200,{ok:true,noop:'reset-stale',reset:RESET_T});
       if (k==='paraveda_orders_v5' && RESET_T>0 && !AWARE && Array.isArray(d)) d=d.filter(o=>o&&Number(o._u||0)>=RESET_T);
-      if (['paraveda_orders_v5','paraveda_users_v1','paraveda_villes_v2','paraveda_chat_v1','paraveda_catalog_v1'].includes(k) && Array.isArray(d) && d.length===0) {
+      if (['paraveda_orders_v5','paraveda_users_v1','paraveda_villes_v2','paraveda_chat_v1','paraveda_catalog_v1','paraveda_backup_v1','paraveda_backup_v1_agents'].includes(k) && Array.isArray(d) && d.length===0) {
         const cd=cur0[k]?.d; if (Array.isArray(cd)&&cd.length) { audit(`ghost | key=${k} | empty write blocked`); return json(res,200,{ok:true,noop:'ghost'}); }
       }
       const data = readRaw();
