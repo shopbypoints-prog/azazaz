@@ -99,22 +99,26 @@ function reset(){
 function jump(){
   if(state==='ready'){ reset(); state='run'; }
   if(state!=='run') return;
-  if(dino.onG){ dino.vy=-12.6; dino.onG=false; beep(520,.09); }
+  if(dino.onG){ dino.vy=-13.4; dino.onG=false; beep(520,.09); }
 }
 function duck(on){ dino.duck=on && dino.onG; }
 
 // ---------- spawn ----------
 function spawn(){
   var r=Math.random();
-  if(score>250 && r<.22){ // طير
-    var lvl=[groundY-47-4, groundY-47-40, groundY-47-78][Math.floor(Math.random()*3)];
+  if(score>250 && r<.18){ // طير
+    // v3.77: الطير العميق (خاصك تنبطح) كيبان غير من 350 نقطة
+    var deep=score>350&&Math.random()<.5;
+    var lvl=deep?groundY-47-44:groundY-47-4-Math.random()*8;
     obs.push({type:'bird',x:W+30,y:lvl,w:42,h:30,fl:0});
   } else { // صباع
-    var n=1+Math.floor(Math.random()*3), w=0, parts=[], x=W+30;
+    // v3.77: 3 صباعات غير قبل 150 نقطة، ومن بعد جوج بالكتير
+    var mx=score<150?3:2, n=1+Math.floor(Math.random()*mx), w=0, parts=[], x=W+30;
     for(var i=0;i<n;i++){ var hh=34+Math.random()*22; parts.push({dx:w,h:hh,w:12+Math.random()*8}); w+=parts[i].w+5; }
     obs.push({type:'cactus',x:x,w:w-5,h:56,parts:parts});
   }
-  spawnIn=45+Math.random()*70-speed*2;
+  // v3.77: فاصل أطول (كان 33 إطار فأحسن حالة — دابا 55)
+  spawnIn=55+Math.random()*80-speed*1.6;
 }
 
 // ---------- update ----------
@@ -123,7 +127,8 @@ function update(){
   scEl.textContent=score;
   if(score>0&&score%100===0&&flashT<=0){ flashT=18; beep(880,.12,'triangle'); setTimeout(function(){beep(1100,.12,'triangle')},110); }
   if(flashT>0) flashT--;
-  speed=Math.min(13.5,6+score*.008);
+  // v3.77: سرعة أبطأ فالبداية وتسلق أخف (كانت 6→13.5، دابا 5→10.5)
+  speed=Math.min(10.5,5+score*.005);
   if(score>0&&Math.floor(score/400)%2===1) night=true; else night=false;
 
   // جاذبية
@@ -144,7 +149,8 @@ function update(){
     if(o.type==='bird'){ o.fl+=.25; o.y+=Math.sin(o.fl)*.6; }
     if(o.x+o.w<-10){ obs.splice(k,1); continue; }
     var dh=dino.duck?30:47;
-    if(dino.x+6<o.x+o.w-4 && dino.x+dino.w-6>o.x+4 && dino.y+4<o.y+o.h-2 && dino.y+dh-3>o.y+2){
+    // v3.77: صندوق تصادم متسامح (margin أكبر من كل الجوانب)
+    if(dino.x+7<o.x+o.w-5 && dino.x+dino.w-7>o.x+5 && dino.y+6<o.y+o.h-3 && dino.y+dh-5>o.y+3){
       state='over'; beep(180,.25,'sawtooth');
       var isNew=score>hi;
       if(isNew){ hi=score; localStorage.setItem('paraveda_dino_hi',String(hi)); hiEl.textContent=hi; }
