@@ -1,6 +1,6 @@
 <?php
 /**
- * Paraveda CRM — api.php (v3.78)
+ * Paraveda CRM — api.php (v3.79)
  *
  * Contract used by index.html (unchanged):
  *   GET  api.php                       → { key: {t, d}, ... }
@@ -314,7 +314,7 @@ if ($m === 'POST') {
   /* -- actions (Digylog etc.) -- */
   if (isset($b['action'])) {
     $a = (string)$b['action'];
-    if ($a === 'ping') crm_out(array('ok'=>true, 'v'=>'3.78'));
+    if ($a === 'ping') crm_out(array('ok'=>true, 'v'=>'3.79'));
     if ($a === 'restore') crm_out(array('ok'=>false, 'err'=>'restore-not-implemented', 'msg'=>'الاسترجاع كيدار يدوياً من مجلد backups'), 501);
     if (strpos($a, 'digylog') === 0) crm_out(array('ok'=>false, 'err'=>'digylog-removed', 'msg'=>'الربط مع Digylog تحيد فـ v3.41'), 410);
     crm_out(array('ok'=>false, 'err'=>'unknown-action'), 400);
@@ -394,8 +394,25 @@ if ($m === 'POST') {
     usort($byId, function($x, $y) { $a = (float)$x['id']; $b = (float)$y['id']; return $a == $b ? 0 : ($a < $b ? -1 : 1); });
     $d = array_values($byId);
   }
-  // v3.78: دمج موحد — اليوزرز/الوكلاء/المدن/غيرهم
-  if (in_array($k, $__NOMERGE, true) && $k !== 'paraveda_orders_v5' && $k !== 'paraveda_chat_v1'
+  // v3.79: اليوزرز — دمج بالصفوف (نفس حل الطلبيات): _u الأحدث كيربح، الحذف _del ناعم.
+  // حتى دفع قديم ولا ساعة متقدمة ما بقاش يقدر يمسح يوزر مضاف.
+  if ($k === 'paraveda_users_v1' && is_array($d) && isset($data[$k]['d']) && is_array($data[$k]['d'])) {
+    $uById = array();
+    foreach ($data[$k]['d'] as $u) { if (is_array($u) && isset($u['id'])) $uById[(string)$u['id']] = $u; }
+    $nowms2 = (int)(microtime(true) * 1000);
+    foreach ($d as $u) {
+      if (!is_array($u) || !isset($u['id'])) continue;
+      if (isset($u['_u']) && (float)$u['_u'] > $nowms2) $u['_u'] = $nowms2;
+      $uid = (string)$u['id'];
+      if (!isset($uById[$uid])) { $uById[$uid] = $u; continue; }
+      $cu = isset($uById[$uid]['_u']) ? (float)$uById[$uid]['_u'] : 0;
+      $nu = isset($u['_u']) ? (float)$u['_u'] : 0;
+      if ($nu > $cu) $uById[$uid] = $u;
+    }
+    $d = array_values($uById);
+  }
+  // v3.78: دمج موحد — الوكلاء/المدن/غيرهم
+  if (in_array($k, $__NOMERGE, true) && $k !== 'paraveda_orders_v5' && $k !== 'paraveda_chat_v1' && $k !== 'paraveda_users_v1'
       && is_array($d) && isset($data[$k]['d']) && is_array($data[$k]['d'])) {
     $d = crm_merge_list($data[$k]['d'], $d, $prevT, $t);
   }

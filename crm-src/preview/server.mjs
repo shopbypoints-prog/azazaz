@@ -134,7 +134,7 @@ const server = http.createServer(async (req,res)=>{
     }
     if (req.method === 'POST') {
       const b = JSON.parse((await bodyOf(req))||'{}');
-      if (b.action === 'ping') return json(res,200,{ok:true,v:'3.78'});
+      if (b.action === 'ping') return json(res,200,{ok:true,v:'3.79'});
       const k0=String(b.key||''); const k=k0.startsWith('afrizon_')?'paraveda_'+k0.slice(8):k0;
       if (!ALLOWED.has(k)) { audit(`reject | key=${k}`); return json(res,400,{ok:false,err:'key-not-allowed'}); }
       let d = unwrap(b.d);
@@ -164,8 +164,21 @@ const server = http.createServer(async (req,res)=>{
           if (byId.has(id0)) byId.get(id0).read = !!(byId.get(id0).read||m.read); else byId.set(id0,m); }
         d = [...byId.values()].sort((a,b)=>(Number(a.id)||0)-(Number(b.id)||0));
       }
-      // v3.78: دمج موحد — اليوزرز/الوكلاء/المدن/غيرهم
-      if (NOMERGE.has(k) && k!=='paraveda_orders_v5' && k!=='paraveda_chat_v1' && Array.isArray(d) && Array.isArray(data[k]?.d)) {
+      // v3.79: اليوزرز — دمج بالصفوف (_u/_del) بحال الطلبيات
+      if (k==='paraveda_users_v1' && Array.isArray(d) && Array.isArray(data[k]?.d)) {
+        const uById=new Map(data[k].d.filter(u=>u&&u.id!==undefined).map(u=>[String(u.id),u]));
+        const nowms=Date.now();
+        for (let u of d){ if(!u||u.id===undefined)continue;
+          if (Number(u._u)>nowms) u={...u,_u:nowms};
+          const id0=String(u.id);
+          if (!uById.has(id0)) { uById.set(id0,u); continue; }
+          const cu=Number(uById.get(id0)._u)||0, nu=Number(u._u)||0;
+          if (nu>cu) uById.set(id0,u);
+        }
+        d = [...uById.values()];
+      }
+      // v3.78: دمج موحد — الوكلاء/المدن/غيرهم
+      if (NOMERGE.has(k) && k!=='paraveda_orders_v5' && k!=='paraveda_chat_v1' && k!=='paraveda_users_v1' && Array.isArray(d) && Array.isArray(data[k]?.d)) {
         const rowKey=r=>{ if(r&&typeof r==='object'&&r.id!==undefined)return 'i:'+String(r.id); if(r===null||typeof r!=='object')return 's:'+String(r); return 'j:'+JSON.stringify(r); };
         if (t >= prevT) d = d;
         else { const have=new Set(data[k].d.map(rowKey)); for (const r of d){ const kk=rowKey(r); if(!have.has(kk)){ data[k].d.push(r); have.add(kk); } } d = data[k].d; }
